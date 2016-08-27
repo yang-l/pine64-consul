@@ -1,6 +1,6 @@
 #+TITLE: Consul for Pine64 (aarch64)
 #+OPTIONS: toc:2 num:nil
 
-[[https://travis-ci.org/yang-l/pine64-consul][file:https://travis-ci.org/yang-l/pine64-consul]]
+[[https://travis-ci.org/yang-l/pine64-consul][file:https://travis-ci.org/yang-l/pine64-consul.svg?branch=master]]
 
 This repository contains code for consul on Pine64. The master branch includes various files for build consul bin file for Pine64. The versioned branch contains compiled consul bin files.
