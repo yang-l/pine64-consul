@@ -1,0 +1,32 @@
+FROM x86_64
+
+RUN set -xe \
+    && apt-get update && apt-get install -y --no-install-recommends \
+       golang \
+       zip \
+       ruby-dev \
+       bundler \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+ENV GOPATH /srv/work
+ENV PATH $PATH:$GOPATH/bin
+
+WORKDIR $GOPATH/src/github.com/hashicorp/consul
+
+# consul git clone
+ENV CONSULVERSION v0.6.4
+RUN git clone --depth 1 --branch $CONSULVERSION https://github.com/hashicorp/consul.git $GOPATH/src/github.com/hashicorp/consul
+
+RUN make tools
+
+# build ui
+RUN cd ui && \
+    bundle && \
+    make dist && \
+    cd - && \
+    make static-assets
+
+RUN env XC_ARCH=amd64 XC_OS=linux make
+
+RUN strip --strip-unneeded bin/consul
