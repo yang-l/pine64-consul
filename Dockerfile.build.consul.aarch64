@@ -1,0 +1,29 @@
+FROM aarch64
+
+RUN set -xe \
+    && apt-get update && apt-get install -y --no-install-recommends \
+       golang \
+       zip \
+       unzip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+ENV GOPATH /srv/work
+ENV PATH $PATH:$GOPATH/bin
+
+WORKDIR $GOPATH/src/github.com/hashicorp/consul
+
+# consul git clone
+ENV CONSULVERSION 0.6.4
+RUN git clone --depth 1 --branch v$CONSULVERSION https://github.com/hashicorp/consul.git $GOPATH/src/github.com/hashicorp/consul
+
+RUN make tools
+
+RUN mkdir -p pkg/web_ui && \
+    curl -sL https://releases.hashicorp.com/consul/"$CONSULVERSION"/consul_"$CONSULVERSION"_web_ui.zip > pkg/web_ui.zip && \
+    unzip pkg/web_ui.zip -d pkg/web_ui/ && \
+    make static-assets
+
+RUN env XC_ARCH=arm64 XC_OS=linux make
+
+RUN strip --strip-unneeded bin/consul
