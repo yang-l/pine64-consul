@@ -11,7 +11,9 @@ branches:
 
 before_install:
   - git clone https://github.com/yang-l/docker-in-travis-ci.git
-  - docker build -t x86_64 -f Dockerfile.dev.x86_64.ubuntu.xenial ./docker-in-travis-ci
+  - cd docker-in-travis-ci
+  - docker build -t x86_64 -f Dockerfile.dev.x86_64.ubuntu.xenial .
+  - cd -
 
 install:
   - docker build -t consul-builder -f Dockerfile.build.consul.x86_64 .
