@@ -1,0 +1,21 @@
+FROM local/alpine
+# based on official docker image for consul - https://github.com/hashicorp/docker-consul/blob/master/0.6/Dockerfile
+
+ADD output/consul /consul
+
+# Server RPC is used for communication between Consul clients and servers for internal
+# request forwarding.
+EXPOSE 8300
+
+# Serf LAN and WAN (WAN is used only by Consul servers) are used for gossip between
+# Consul agents. LAN is within the datacenter and WAN is between just the Consul
+# servers in all datacenters.
+EXPOSE 8301 8301/udp 8302 8302/udp
+
+# CLI, HTTP, and DNS (both TCP and UDP) are the primary interfaces that applications
+# use to interact with Consul.
+EXPOSE 8400 8500 8600 8600/udp
+
+ENTRYPOINT ["/consul"]
+
+CMD ["-v"]
