@@ -4,3 +4,92 @@
 [[https://travis-ci.org/yang-l/pine64-consul][file:https://travis-ci.org/yang-l/pine64-consul.svg?branch=master]]
 
 This repository contains code for consul on Pine64. The master branch includes various files for build consul bin file for Pine64. The versioned branch contains compiled consul bin files.
+
+To build a consul docker images on Pine64 (aarch64), run
+
+#+BEGIN_SRC bash
+root@pine64:/srv/pine64/pine64-consul# docker build -t consul -f Dockerfile.aarch54  .
+Sending build context to Docker daemon 15.02 MB
+Step 1 : FROM local/alpine
+ ---> 3a307a022869
+Step 2 : ADD output/consul /consul
+ ---> 2d50535cc858
+Removing intermediate container b73016d70499
+Step 3 : EXPOSE 8300
+ ---> Running in ed228b56e070
+ ---> fee1dafe5445
+Removing intermediate container ed228b56e070
+Step 4 : EXPOSE 8301 8301/udp 8302 8302/udp
+ ---> Running in 28c22201325f
+ ---> bf0f9836ef4b
+Removing intermediate container 28c22201325f
+Step 5 : EXPOSE 8400 8500 8600 8600/udp
+ ---> Running in 5f919de818f7
+ ---> 3ffd3f65b281
+Removing intermediate container 5f919de818f7
+Step 6 : ENTRYPOINT /consul
+ ---> Running in a3a1caf67e5c
+ ---> c90b91e3d0bb
+Removing intermediate container a3a1caf67e5c
+Step 7 : CMD -v
+ ---> Running in b5d6b52abcb4
+ ---> 0278ef0cc80e
+Removing intermediate container b5d6b52abcb4
+Successfully built 0278ef0cc80e
+root@pine64:/srv/pine64/pine64-consul#
+#+END_SRC
+
+This requires the consul bin file to be existed as =output/consul=. This bin file is built by =Dockerfile.build.consul.aarch64=, and a pre-compiled bin file is created for [[https://github.com/yang-l/pine64-consul/blob/0.6.4/consul.tar.xz][v0.6.4]].
+
+#+BEGIN_SRC bash
+root@pine64:/srv/pine64/pine64-consul# uname -a
+Linux pine64 3.10.102-2-pine64-longsleep #66 SMP PREEMPT Sat Jul 16 10:53:13 CEST 2016 aarch64 GNU/Linux
+root@pine64:/srv/kernel/linux-pine64/pine64/pine64-consul# file output/consul
+output/consul: ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, stripped
+root@pine64:/srv/pine64/pine64-consul# docker run -ti --rm consul
+Consul v0.6.4
+Consul Protocol: 3 (Understands back to: 1)
+root@pine64:/srv/pine64/pine64-consul#
+#+END_SRC
+
+It now can start to form consul cluster
+
+#+BEGIN_SRC bash
+root@pine64:/srv/pine64/pine64-consul# docker run -d -p 8500:8500 consul agent -server  -bootstrap-expect 1 -data-dir /tmp/ -ui -client=0.0.0.0
+df0dc8dee592d275a0a6903eb46ffe198bb39a2937a15914364dfab457a52a2c
+root@pine64:/srv/pine64/pine64-consul# docker ps -a
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS                                                                                NAMES
+df0dc8dee592        consul              "/consul agent -serve"   2 minutes ago       Up 2 minutes        8300-8302/tcp, 8400/tcp, 8301-8302/udp, 8600/tcp, 8600/udp, 0.0.0.0:8500->8500/tcp   ecstatic_mcclintock
+root@pine64:/srv/pine64/pine64-consul# docker logs ecstatic_mcclintock
+==> WARNING: BootstrapExpect Mode is specified as 1; this is the same as Bootstrap mode.
+==> WARNING: Bootstrap mode enabled! Do not enable unless necessary
+==> Starting Consul agent...
+==> Starting Consul agent RPC...
+==> Consul agent running!
+         Node name: 'df0dc8dee592'
+        Datacenter: 'dc1'
+            Server: true (bootstrap: true)
+       Client Addr: 0.0.0.0 (HTTP: 8500, HTTPS: -1, DNS: 8600, RPC: 8400)
+      Cluster Addr: 172.17.0.2 (LAN: 8301, WAN: 8302)
+    Gossip encrypt: false, RPC-TLS: false, TLS-Incoming: false
+             Atlas: <disabled>
+
+==> Log data will now stream in as it occurs:
+
+    2016/08/30 10:39:56 [ERR] agent: failed to sync remote state: No cluster leader    2016/08/30 10:39:56 [INFO] raft: Node at 172.17.0.2:8300 [Follower] entering Follower state
+    2016/08/30 10:39:56 [INFO] serf: EventMemberJoin: df0dc8dee592 172.17.0.2
+
+    2016/08/30 10:39:56 [INFO] consul: adding LAN server df0dc8dee592 (Addr: 172.17.0.2:8300) (DC: dc1)
+    2016/08/30 10:39:56 [INFO] serf: EventMemberJoin: df0dc8dee592.dc1 172.17.0.2
+    2016/08/30 10:39:56 [INFO] consul: adding WAN server df0dc8dee592.dc1 (Addr: 172.17.0.2:8300) (DC: dc1)
+    2016/08/30 10:39:58 [WARN] raft: Heartbeat timeout reached, starting election
+    2016/08/30 10:39:58 [INFO] raft: Node at 172.17.0.2:8300 [Candidate] entering Candidate state
+    2016/08/30 10:39:58 [INFO] raft: Election won. Tally: 1
+    2016/08/30 10:39:58 [INFO] raft: Node at 172.17.0.2:8300 [Leader] entering Leader state
+    2016/08/30 10:39:58 [INFO] consul: cluster leadership acquired
+    2016/08/30 10:39:58 [INFO] consul: New leader elected: df0dc8dee592
+    2016/08/30 10:39:58 [INFO] raft: Disabling EnableSingleNode (bootstrap)
+    2016/08/30 10:39:58 [INFO] consul: member 'df0dc8dee592' joined, marking health alive
+    2016/08/30 10:40:01 [INFO] agent: Synced service 'consul'
+root@pine64:/srv/pine64/pine64-consul#
+#+END_SRC

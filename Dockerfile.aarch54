@@ -1,7 +1,11 @@
+# this docker image is built by https://github.com/yang-l/pine64-alpine/blob/master/Dockerfile
 FROM local/alpine
-# based on official docker image for consul - https://github.com/hashicorp/docker-consul/blob/master/0.6/Dockerfile
 
+# this consul bin file is compiled by the Dockerfile.build.consul.* files under this repostory
+# please make sure it is the same architecture as 'local/alpine'
 ADD output/consul /consul
+
+# based on official docker image for consul - https://github.com/hashicorp/docker-consul/blob/master/0.6/Dockerfile
 
 # Server RPC is used for communication between Consul clients and servers for internal
 # request forwarding.
