@@ -1,0 +1,7 @@
+{
+    "data_dir": "/consul/data",
+    "log_level": "INFO",
+    "ui": true,
+    "client_addr": "0.0.0.0",
+    "leave_on_terminate": true
+}
