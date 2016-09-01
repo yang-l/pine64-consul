@@ -12,7 +12,7 @@ RUN addgroup consul && \
 # with /consul/config as the configuration directory so you can add additional
 # config files in that location.
 RUN mkdir -p /consul/data && \
-    mkdir -p /consul/config && \
+    mkdir -p /consul/consul.d && \
     chown -R consul:consul /consul
 
 USER consul
@@ -20,7 +20,7 @@ USER consul
 # this consul bin file is compiled by the Dockerfile.build.consul.* files under this repostory
 # please make sure it is the same architecture as 'local/alpine'
 ADD output/consul /consul/consul
-ADD config /consul/config/
+ADD config /consul/consul.d/
 
 # Expose the consul data directory as a volume since there's mutable state in there.
 VOLUME /consul/data

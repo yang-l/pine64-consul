@@ -1,0 +1,11 @@
+{
+    "checks": [
+        {
+            "id": "memory-status",
+            "name": "Memory Status",
+            "notes": "Critical level 95%+ | Warning level 80%+",
+            "script": "/consul/consul.d/scripts/memory_check.sh",
+            "interval": "1m"
+        }
+    ]
+}
