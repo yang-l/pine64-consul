@@ -94,81 +94,156 @@ root@pine64:/srv/pine64/pine64-consul# docker logs ecstatic_mcclintock
 root@pine64:/srv/pine64/pine64-consul#
 #+END_SRC
 
-To quick form a three-nodes cluster, it can be done as
+Now it's time to form a  multi-nodes cluster. But before that, a new network bridge for docker should be formed, and each container will be assgined with an unique IP, instead of the host IP with port mapping, and they can be accessed by other hosts.
 
 #+BEGIN_SRC bash
-root@pine64:/srv/pine64/pine64-consul# docker run -d --name consul-1 -p 8500:8500 consul agent -data-dir=/consul/config -server -bootstrap-expect 1
-c7c3917e5c07c52cef1aa91bbcfe4242c3e9cc9f23986202f5111847ab14d254
-root@pine64:/srv/pine64/pine64-consul# docker run -d --name consul-2 consul agent -data-dir=/consul/config -server -retry-join=172.17.0.2
-064891ac4f36352f2c3092d683d7e651e050844f21e6e35acba736a2878a327e
-root@pine64:/srv/pine64/pine64-consul# docker run -d --name consul-3 consul agent -data-dir=/consul/config -server -retry-join=172.17.0.2
-23363615f989194c851c56f115952b66904651fe9cc3b532ba4f57f8ca6f8918
-root@pine64:/srv/pine64/pine64-consul# docker ps -a
-CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS                                                                                NAMES
-23363615f989        consul              "/consul/consul agent"   5 minutes ago       Up 5 minutes        8300-8302/tcp, 8400/tcp, 8500/tcp, 8301-8302/udp, 8600/tcp, 8600/udp                 consul-3
-064891ac4f36        consul              "/consul/consul agent"   5 minutes ago       Up 5 minutes        8300-8302/tcp, 8400/tcp, 8500/tcp, 8301-8302/udp, 8600/tcp, 8600/udp                 consul-2
-c7c3917e5c07        consul              "/consul/consul agent"   8 minutes ago       Up 8 minutes        8300-8302/tcp, 8400/tcp, 8301-8302/udp, 8600/tcp, 8600/udp, 0.0.0.0:8500->8500/tcp   consul-1
-root@pine64:/srv/pine64/pine64-consul# docker logs consul-1
-==> WARNING: BootstrapExpect Mode is specified as 1; this is the same as Bootstrap mode.
-==> WARNING: Bootstrap mode enabled! Do not enable unless necessary
+debian@pine64:~$ docker network create --subnet 192.168.5.216/29 --gateway 192.168.5.222 docker_bridge
+73c5358cb28404ae5261d8b9d6c2848c30ba6714d00f87748f28bdf44ad904c7
+debian@pine64:~$ docker network ls
+NETWORK ID          NAME                DRIVER              SCOPE
+4d4efabb7ad8        bridge              bridge              local
+73c5358cb284        docker_bridge       bridge              local
+7d15b1f3cf1a        docker_gwbridge     bridge              local
+576dd0bc7721        host                host                local
+cy2wrxuzfdiu        ingress             overlay             swarm
+da441064826b        none                null                local
+debian@pine64:~$
+#+END_SRC
+
+Now to form a cluster with multiple nodes, this can be done as
+
+#+BEGIN_SRC bash
+debian@pine64:~$ docker run -d --name consul-1 --net docker_bridge --ip 192.168.5.217 consul agent -config-dir=/consul/config -server -bootstrap-expect 3 -client 192.168.5.217
+e7adf17548e1b3545ad1bfa1493d733ff284c51e7136473d0e3c506485e8cc6c
+debian@pine64:~$ docker run -d --name consul-2 --net docker_bridge --ip 192.168.5.218 consul agent -config-dir=/consul/config -server -client 192.168.5.218 -retry-join=192.168.5.217
+661ebaae9131ff2ba5784f34a35b49280bfce1d68bc12d1782d971526d8f6608
+debian@pine64:~$ docker run -d --name consul-3 --net docker_bridge --ip 192.168.5.219 consul agent -config-dir=/consul/config -server -client 192.168.5.219 -retry-join=192.168.5.217
+9131ff608f3a297e31ba2af448d1966fe1ba0cc61cbb625f145e5e7534eb9467
+#+END_SRC
+
+#+BEGIN_SRC bash
+debian@pine64:~$ docker ps -a
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS                                                                  NAMES
+9131ff608f3a        consul              "/consul/consul agent"   3 minutes ago       Up 2 minutes        8300-8302/tcp, 8400/tcp, 8500/tcp, 8301-8302/udp, 8600/tcp, 8600/udp   consul-3
+661ebaae9131        consul              "/consul/consul agent"   3 minutes ago       Up 3 minutes        8300-8302/tcp, 8400/tcp, 8500/tcp, 8301-8302/udp, 8600/tcp, 8600/udp   consul-2
+e7adf17548e1        consul              "/consul/consul agent"   4 minutes ago       Up 3 minutes        8300-8302/tcp, 8400/tcp, 8500/tcp, 8301-8302/udp, 8600/tcp, 8600/udp   consul-1
+#+END_SRC
+
+#+BEGIN_SRC bash
+debian@pine64:~$ docker logs consul-1
+==> WARNING: Expect Mode enabled, expecting 3 servers
 ==> Starting Consul agent...
 ==> Starting Consul agent RPC...
 ==> Consul agent running!
-         Node name: 'c7c3917e5c07'
+         Node name: 'e7adf17548e1'
         Datacenter: 'dc1'
-            Server: true (bootstrap: true)
-       Client Addr: 127.0.0.1 (HTTP: 8500, HTTPS: -1, DNS: 8600, RPC: 8400)
-      Cluster Addr: 172.17.0.2 (LAN: 8301, WAN: 8302)
+            Server: true (bootstrap: false)
+       Client Addr: 192.168.5.217 (HTTP: 8500, HTTPS: -1, DNS: 8600, RPC: 8400)
+      Cluster Addr: 192.168.5.217 (LAN: 8301, WAN: 8302)
     Gossip encrypt: false, RPC-TLS: false, TLS-Incoming: false
              Atlas: <disabled>
 
 ==> Log data will now stream in as it occurs:
 
-    2016/08/31 10:22:13 [INFO] raft: Node at 172.17.0.2:8300 [Follower] entering Follower state
-    2016/08/31 10:22:13 [INFO] serf: EventMemberJoin: c7c3917e5c07 172.17.0.2
-    2016/08/31 10:22:13 [INFO] consul: adding LAN server c7c3917e5c07 (Addr: 172.17.0.2:8300) (DC: dc1)
-    2016/08/31 10:22:13 [INFO] serf: EventMemberJoin: c7c3917e5c07.dc1 172.17.0.2
-    2016/08/31 10:22:13 [INFO] consul: adding WAN server c7c3917e5c07.dc1 (Addr: 172.17.0.2:8300) (DC: dc1)
-    2016/08/31 10:22:13 [ERR] agent: failed to sync remote state: No cluster leader
-    2016/08/31 10:22:14 [WARN] raft: Heartbeat timeout reached, starting election
-    2016/08/31 10:22:14 [INFO] raft: Node at 172.17.0.2:8300 [Candidate] entering Candidate state
-    2016/08/31 10:22:15 [INFO] raft: Election won. Tally: 1
-    2016/08/31 10:22:15 [INFO] raft: Node at 172.17.0.2:8300 [Leader] entering Leader state
-    2016/08/31 10:22:15 [INFO] consul: cluster leadership acquired
-    2016/08/31 10:22:15 [INFO] consul: New leader elected: c7c3917e5c07
-    2016/08/31 10:22:15 [INFO] raft: Disabling EnableSingleNode (bootstrap)
-    2016/08/31 10:22:15 [INFO] consul: member 'c7c3917e5c07' joined, marking health alive
-    2016/08/31 10:22:15 [INFO] agent: Synced service 'consul'
-    2016/08/31 10:23:20 [INFO] agent: Synced service 'consul'
-    2016/08/31 10:24:52 [INFO] serf: EventMemberJoin: 064891ac4f36 172.17.0.3
-    2016/08/31 10:24:52 [INFO] consul: adding LAN server 064891ac4f36 (Addr: 172.17.0.3:8300) (DC: dc1)
-    2016/08/31 10:24:52 [INFO] raft: Added peer 172.17.0.3:8300, starting replication
-    2016/08/31 10:24:53 [WARN] raft: Failed to contact 172.17.0.3:8300 in 977.201ms
-    2016/08/31 10:24:53 [WARN] raft: Failed to contact quorum of nodes, stepping down
-    2016/08/31 10:24:53 [INFO] raft: Node at 172.17.0.2:8300 [Follower] entering Follower state
-    2016/08/31 10:24:53 [INFO] consul: cluster leadership lost
-    2016/08/31 10:24:53 [ERR] consul: failed to add raft peer: leadership lost while committing log
-    2016/08/31 10:24:53 [ERR] consul: failed to reconcile member: {064891ac4f36 172.17.0.3 8301 map[vsn_min:1 vsn_max:3 build:0.6.4:26a0ef8c port:8300 role:consul dc:dc1 vsn:2] alive 1 3 2 2 4 4}: leadership lost while committing log
-    2016/08/31 10:24:53 [WARN] raft: AppendEntries to 172.17.0.3:8300 rejected, sending older logs (next: 1)
-    2016/08/31 10:24:53 [INFO] raft: pipelining replication to peer 172.17.0.3:8300
-    2016/08/31 10:24:53 [INFO] raft: aborting pipeline replication to peer 172.17.0.3:8300
-    2016/08/31 10:24:54 [WARN] raft: Heartbeat timeout reached, starting election
-    2016/08/31 10:24:54 [INFO] raft: Node at 172.17.0.2:8300 [Candidate] entering Candidate state
-    2016/08/31 10:24:54 [INFO] raft: Election won. Tally: 2
-    2016/08/31 10:24:54 [INFO] raft: Node at 172.17.0.2:8300 [Leader] entering Leader state
-    2016/08/31 10:24:54 [INFO] consul: cluster leadership acquired
-    2016/08/31 10:24:54 [INFO] consul: New leader elected: c7c3917e5c07
-    2016/08/31 10:24:54 [WARN] raft: AppendEntries to 172.17.0.3:8300 rejected, sending older logs (next: 14)
-    2016/08/31 10:24:54 [INFO] raft: pipelining replication to peer 172.17.0.3:8300
-    2016/08/31 10:24:54 [INFO] consul: member '064891ac4f36' joined, marking health alive
-    2016/08/31 10:25:05 [INFO] serf: EventMemberJoin: 23363615f989 172.17.0.4
-    2016/08/31 10:25:05 [INFO] consul: adding LAN server 23363615f989 (Addr: 172.17.0.4:8300) (DC: dc1)
-    2016/08/31 10:25:05 [INFO] raft: Added peer 172.17.0.4:8300, starting replication
-    2016/08/31 10:25:06 [WARN] raft: Failed to contact 172.17.0.4:8300 in 990.425ms
-    2016/08/31 10:25:06 [WARN] raft: AppendEntries to 172.17.0.4:8300 rejected, sending older logs (next: 1)
-    2016/08/31 10:25:07 [WARN] raft: Failed to contact 172.17.0.4:8300 in 500.231ms
-    2016/08/31 10:25:07 [WARN] raft: Failed to contact 172.17.0.4:8300 in 890.988ms
-    2016/08/31 10:25:07 [INFO] consul: member '23363615f989' joined, marking health alive
-    2016/08/31 10:25:12 [INFO] raft: pipelining replication to peer 172.17.0.4:8300
-root@pine64:/srv/pine64/pine64-consul#
+    2016/09/01 08:21:24 [INFO] raft: Node at 192.168.5.217:8300 [Follower] entering Follower state
+    2016/09/01 08:21:24 [INFO] serf: EventMemberJoin: e7adf17548e1 192.168.5.217
+    2016/09/01 08:21:24 [INFO] serf: EventMemberJoin: e7adf17548e1.dc1 192.168.5.217
+    2016/09/01 08:21:24 [INFO] consul: adding LAN server e7adf17548e1 (Addr: 192.168.5.217:8300) (DC: dc1)
+    2016/09/01 08:21:24 [INFO] consul: adding WAN server e7adf17548e1.dc1 (Addr: 192.168.5.217:8300) (DC: dc1)
+    2016/09/01 08:21:24 [ERR] agent: failed to sync remote state: No cluster leader
+    2016/09/01 08:21:25 [WARN] raft: EnableSingleNode disabled, and no known peers. Aborting election.
+    2016/09/01 08:21:44 [ERR] agent: coordinate update error: No cluster leader
+    2016/09/01 08:21:47 [ERR] agent: failed to sync remote state: No cluster leader
+    2016/09/01 08:22:00 [INFO] serf: EventMemberJoin: 661ebaae9131 192.168.5.218
+    2016/09/01 08:22:00 [INFO] consul: adding LAN server 661ebaae9131 (Addr: 192.168.5.218:8300) (DC: dc1)
+    2016/09/01 08:22:03 [ERR] agent: failed to sync remote state: No cluster leader
+    2016/09/01 08:22:09 [ERR] agent: coordinate update error: No cluster leader
+    2016/09/01 08:22:26 [ERR] agent: coordinate update error: No cluster leader
+    2016/09/01 08:22:29 [ERR] agent: failed to sync remote state: No cluster leader
+    2016/09/01 08:22:30 [INFO] serf: EventMemberJoin: 9131ff608f3a 192.168.5.219
+    2016/09/01 08:22:30 [INFO] consul: adding LAN server 9131ff608f3a (Addr: 192.168.5.219:8300) (DC: dc1)
+    2016/09/01 08:22:30 [INFO] consul: Attempting bootstrap with nodes: [192.168.5.217:8300 192.168.5.218:8300 192.168.5.219:8300]
+    2016/09/01 08:22:31 [WARN] raft: Heartbeat timeout reached, starting election
+    2016/09/01 08:22:31 [INFO] raft: Node at 192.168.5.217:8300 [Candidate] entering Candidate state
+    2016/09/01 08:22:32 [WARN] raft: Remote peer 192.168.5.219:8300 does not have local node 192.168.5.217:8300 as a peer
+    2016/09/01 08:22:32 [INFO] raft: Election won. Tally: 2
+    2016/09/01 08:22:32 [INFO] raft: Node at 192.168.5.217:8300 [Leader] entering Leader state
+    2016/09/01 08:22:32 [INFO] consul: cluster leadership acquired
+    2016/09/01 08:22:32 [INFO] consul: New leader elected: e7adf17548e1
+    2016/09/01 08:22:32 [INFO] raft: pipelining replication to peer 192.168.5.218:8300
+    2016/09/01 08:22:32 [INFO] raft: pipelining replication to peer 192.168.5.219:8300
+    2016/09/01 08:22:32 [WARN] raft: Remote peer 192.168.5.218:8300 does not have local node 192.168.5.217:8300 as a peer
+    2016/09/01 08:22:32 [INFO] consul: member 'e7adf17548e1' joined, marking health alive
+    2016/09/01 08:22:32 [INFO] consul: member '661ebaae9131' joined, marking health alive
+    2016/09/01 08:22:33 [INFO] consul: member '9131ff608f3a' joined, marking health alive
+    2016/09/01 08:22:33 [INFO] agent: Synced service 'consul'
+#+END_SRC
+
+#+BEGIN_SRC bash
+debian@pine64:~$ docker logs consul-2
+==> Starting Consul agent...
+==> Starting Consul agent RPC...
+==> Consul agent running!
+         Node name: '661ebaae9131'
+        Datacenter: 'dc1'
+            Server: true (bootstrap: false)
+       Client Addr: 192.168.5.218 (HTTP: 8500, HTTPS: -1, DNS: 8600, RPC: 8400)
+      Cluster Addr: 192.168.5.218 (LAN: 8301, WAN: 8302)
+    Gossip encrypt: false, RPC-TLS: false, TLS-Incoming: false
+             Atlas: <disabled>
+
+==> Log data will now stream in as it occurs:
+
+    2016/09/01 08:22:00 [INFO] raft: Node at 192.168.5.218:8300 [Follower] entering Follower state
+    2016/09/01 08:22:00 [INFO] serf: EventMemberJoin: 661ebaae9131 192.168.5.218
+    2016/09/01 08:22:00 [INFO] consul: adding LAN server 661ebaae9131 (Addr: 192.168.5.218:8300) (DC: dc1)
+    2016/09/01 08:22:00 [INFO] serf: EventMemberJoin: 661ebaae9131.dc1 192.168.5.218
+    2016/09/01 08:22:00 [INFO] consul: adding WAN server 661ebaae9131.dc1 (Addr: 192.168.5.218:8300) (DC: dc1)
+    2016/09/01 08:22:00 [ERR] agent: failed to sync remote state: No cluster leader
+    2016/09/01 08:22:00 [INFO] agent: Joining cluster...
+    2016/09/01 08:22:00 [INFO] agent: (LAN) joining: [192.168.5.217]
+    2016/09/01 08:22:00 [INFO] serf: EventMemberJoin: e7adf17548e1 192.168.5.217
+    2016/09/01 08:22:00 [INFO] consul: adding LAN server e7adf17548e1 (Addr: 192.168.5.217:8300) (DC: dc1)
+    2016/09/01 08:22:00 [INFO] agent: (LAN) joined: 1 Err: <nil>
+    2016/09/01 08:22:00 [INFO] agent: Join completed. Synced with 1 initial agents
+    2016/09/01 08:22:02 [WARN] raft: EnableSingleNode disabled, and no known peers. Aborting election.
+    2016/09/01 08:22:18 [ERR] agent: coordinate update error: No cluster leader
+    2016/09/01 08:22:30 [ERR] agent: failed to sync remote state: No cluster leader
+    2016/09/01 08:22:31 [INFO] serf: EventMemberJoin: 9131ff608f3a 192.168.5.219
+    2016/09/01 08:22:31 [INFO] consul: adding LAN server 9131ff608f3a (Addr: 192.168.5.219:8300) (DC: dc1)
+    2016/09/01 08:22:32 [INFO] consul: New leader elected: e7adf17548e1
+    2016/09/01 08:22:33 [INFO] agent: Synced service 'consul'
+#+END_SRC
+
+#+BEGIN_SRC bash
+debian@pine64:~$ docker logs consul-3
+==> Starting Consul agent...
+==> Starting Consul agent RPC...
+==> Consul agent running!
+         Node name: '9131ff608f3a'
+        Datacenter: 'dc1'
+            Server: true (bootstrap: false)
+       Client Addr: 192.168.5.219 (HTTP: 8500, HTTPS: -1, DNS: 8600, RPC: 8400)
+      Cluster Addr: 192.168.5.219 (LAN: 8301, WAN: 8302)
+    Gossip encrypt: false, RPC-TLS: false, TLS-Incoming: false
+             Atlas: <disabled>
+
+==> Log data will now stream in as it occurs:
+
+    2016/09/01 08:22:30 [INFO] raft: Node at 192.168.5.219:8300 [Follower] entering Follower state
+    2016/09/01 08:22:30 [INFO] serf: EventMemberJoin: 9131ff608f3a 192.168.5.219
+    2016/09/01 08:22:30 [INFO] consul: adding LAN server 9131ff608f3a (Addr: 192.168.5.219:8300) (DC: dc1)
+    2016/09/01 08:22:30 [INFO] serf: EventMemberJoin: 9131ff608f3a.dc1 192.168.5.219
+    2016/09/01 08:22:30 [INFO] consul: adding WAN server 9131ff608f3a.dc1 (Addr: 192.168.5.219:8300) (DC: dc1)
+    2016/09/01 08:22:30 [ERR] agent: failed to sync remote state: No cluster leader
+    2016/09/01 08:22:30 [INFO] agent: Joining cluster...
+    2016/09/01 08:22:30 [INFO] agent: (LAN) joining: [192.168.5.217]
+    2016/09/01 08:22:30 [INFO] serf: EventMemberJoin: 661ebaae9131 192.168.5.218
+    2016/09/01 08:22:30 [INFO] consul: adding LAN server 661ebaae9131 (Addr: 192.168.5.218:8300) (DC: dc1)
+    2016/09/01 08:22:30 [INFO] serf: EventMemberJoin: e7adf17548e1 192.168.5.217
+    2016/09/01 08:22:30 [INFO] agent: (LAN) joined: 1 Err: <nil>
+    2016/09/01 08:22:30 [INFO] agent: Join completed. Synced with 1 initial agents
+    2016/09/01 08:22:30 [INFO] consul: adding LAN server e7adf17548e1 (Addr: 192.168.5.217:8300) (DC: dc1)
+    2016/09/01 08:22:32 [INFO] consul: New leader elected: e7adf17548e1
+    2016/09/01 08:22:34 [INFO] agent: Synced service 'consul'
 #+END_SRC
